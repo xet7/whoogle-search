@@ -1,4 +1,4 @@
-# Whoogle Search
+![Whoogle Search](docs/banner.png)
 
 [![Latest Release](https://img.shields.io/github/v/release/benbusby/whoogle-search)](https://github.com/benbusby/shoogle/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -67,7 +67,7 @@ Provides:
 [![Run on Repl.it](https://repl.it/badge/github/benbusby/whoogle-search)](https://repl.it/github/benbusby/whoogle-search)
 
 Provides:
-- Free deployment of app (can be ran without account)
+- Free deployment of app
 - Free HTTPS url (https://\<app name\>.\<username\>\.repl\.co)
     - Supports custom domains
 - Downtime after periods of inactivity \([solution 1](https://repl.it/talk/ask/use-this-pingmat1replco-just-enter/28821/101298), [solution 2](https://repl.it/talk/learn/How-to-use-and-setup-UptimeRobot/9003)\)
@@ -129,6 +129,12 @@ Description=Whoogle
 #Environment=WHOOGLE_PROXY_PASS=<proxy password>
 #Environment=WHOOGLE_PROXY_TYPE=<proxy type (http|proxy4|proxy5)
 #Environment=WHOOGLE_PROXY_LOC=<proxy host/ip>
+# Site alternative configurations, uncomment to enable
+# Note: If not set, the feature will still be available
+# with default values. 
+#Environment=WHOOGLE_ALT_TW=nitter.net
+#Environment=WHOOGLE_ALT_YT=invidious.snopyta.org
+#Environment=WHOOGLE_ALT_IG=bibliogram.art/u
 Type=simple
 User=root
 WorkingDirectory=<whoogle_directory>
@@ -229,7 +235,10 @@ There are a few optional environment variables available for customizing a Whoog
 | WHOOGLE_PROXY_TYPE | The type of the proxy server. Can be "socks5", "socks4", or "http".           |
 | WHOOGLE_PROXY_LOC  | The location of the proxy server (host or ip).                 |
 | EXPOSE_PORT        | The port where Whoogle will be exposed.                        |
-| HTTPS_ONLY         | Enforce HTTPS. (See [here](https://github.com/benbusby/whoogle-search#https-enforcement))                            |
+| HTTPS_ONLY         | Enforce HTTPS. (See [here](https://github.com/benbusby/whoogle-search#https-enforcement)) |
+| WHOOGLE_ALT_TW     | The twitter.com alternative to use when site alternatives are enabled in the config. |
+| WHOOGLE_ALT_YT     | The youtube.com alternative to use when site alternatives are enabled in the config. |
+| WHOOGLE_ALT_IG     | The instagram.com alternative to use when site alternatives are enabled in the config. |
 
 ## Usage
 Same as most search engines, with the exception of filtering by time range.
@@ -318,7 +327,7 @@ A lot of the app currently piggybacks on Google's existing support for fetching 
 
 ## Screenshots
 #### Desktop
-![Whoogle Desktop](app/static/img/docs/screenshot_desktop.jpg)
+![Whoogle Desktop](docs/screenshot_desktop.jpg)
 
 #### Mobile
-![Whoogle Mobile](app/static/img/docs/screenshot_mobile.jpg)
+![Whoogle Mobile](docs/screenshot_mobile.jpg)
