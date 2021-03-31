@@ -16,8 +16,9 @@ from requests import exceptions
 from app import app
 from app.models.config import Config
 from app.request import Request, TorError
-from app.utils.session_utils import valid_user_session
-from app.utils.routing_utils import *
+from app.utils.bangs import resolve_bang
+from app.utils.session import valid_user_session
+from app.utils.search import *
 
 # Load DDG bang json files only on init
 bang_json = json.load(open(app.config['BANG_FILE']))
@@ -53,8 +54,7 @@ def before_request_func():
     # Generate session values for user if unavailable
     if not valid_user_session(session):
         session['config'] = json.load(open(app.config['DEFAULT_CONFIG'])) \
-            if os.path.exists(app.config['DEFAULT_CONFIG']) else {
-            'url': request.url_root}
+            if os.path.exists(app.config['DEFAULT_CONFIG']) else {}
         session['uuid'] = str(uuid.uuid4())
         session['fernet_keys'] = generate_user_keys(True)
 
@@ -87,7 +87,7 @@ def before_request_func():
 
 
 @app.after_request
-def after_request_func(response):
+def after_request_func(resp):
     if app.user_elements[session['uuid']] <= 0 and '/element' in request.url:
         # Regenerate element key if all elements have been served to user
         session['fernet_keys'][
@@ -108,7 +108,11 @@ def after_request_func(response):
         for key in session_list:
             session.pop(key)
 
-    return response
+    resp.headers['Content-Security-Policy'] = app.config['CSP']
+    if os.environ.get('HTTPS_ONLY', False):
+        resp.headers['Content-Security-Policy'] += 'upgrade-insecure-requests'
+
+    return resp
 
 
 @app.errorhandler(404)
@@ -122,15 +126,17 @@ def unknown_page(e):
 def index():
     # Reset keys
     session['fernet_keys'] = generate_user_keys(g.cookies_disabled)
-    error_message = session[
-        'error_message'] if 'error_message' in session else ''
-    session['error_message'] = ''
+
+    # Redirect if an error was raised
+    if 'error_message' in session and session['error_message']:
+        error_message = session['error_message']
+        session['error_message'] = ''
+        return render_template('error.html', error_message=error_message)
 
     return render_template('index.html',
                            languages=app.config['LANGUAGES'],
                            countries=app.config['COUNTRIES'],
                            config=g.user_config,
-                           error_message=error_message,
                            tor_available=int(os.environ.get('TOR_AVAILABLE')),
                            version_number=app.config['VERSION_NUMBER'])
 
@@ -193,13 +199,13 @@ def search():
     # Update user config if specified in search args
     g.user_config = g.user_config.from_params(g.request_params)
 
-    search_util = RoutingUtils(request, g.user_config, session,
-                               cookies_disabled=g.cookies_disabled)
+    search_util = Search(request, g.user_config, session,
+                         cookies_disabled=g.cookies_disabled)
     query = search_util.new_search_query()
 
-    resolved_bangs = search_util.bang_operator(bang_json)
-    if resolved_bangs != '':
-        return redirect(resolved_bangs)
+    bang = resolve_bang(query=query, bangs_dict=bang_json)
+    if bang != '':
+        return redirect(bang)
 
     # Redirect to home if invalid/blank search
     if not query:
@@ -222,20 +228,23 @@ def search():
     # the element key can be regenerated
     app.user_elements[session['uuid']] = elements
 
+    # Return 503 if temporarily blocked by captcha
+    resp_code = 503 if has_captcha(str(response)) else 200
+
     return render_template(
         'display.html',
         query=urlparse.unquote(query),
         search_type=search_util.search_type,
-        dark_mode=g.user_config.dark,
+        config=g.user_config,
         response=response,
         version_number=app.config['VERSION_NUMBER'],
         search_header=(render_template(
             'header.html',
-            dark_mode=g.user_config.dark,
+            config=g.user_config,
             query=urlparse.unquote(query),
             search_type=search_util.search_type,
             mobile=g.user_request.mobile)
-                if 'isch' not in search_util.search_type else ''))
+                if 'isch' not in search_util.search_type else '')), resp_code
 
 
 @app.route('/config', methods=['GET', 'POST', 'PUT'])
@@ -286,7 +295,9 @@ def url():
     if len(q) > 0 and 'http' in q:
         return redirect(q)
     else:
-        return render_template('error.html', query=q)
+        return render_template(
+            'error.html',
+            error_message='Unable to resolve query: ' + q)
 
 
 @app.route('/imgres')
@@ -335,7 +346,7 @@ def window():
     return render_template('display.html', response=results)
 
 
-def run_app():
+def run_app() -> None:
     parser = argparse.ArgumentParser(
         description='Whoogle Search console runner')
     parser.add_argument(

@@ -23,16 +23,16 @@ class TorError(Exception):
     """Exception raised for errors in Tor requests.
 
     Attributes:
-        message -- a message describing the error that occurred
-        disable -- optionally disables Tor in the user config (note:
+        message: a message describing the error that occurred
+        disable: optionally disables Tor in the user config (note:
             this should only happen if the connection has been dropped
             altogether).
     """
 
-    def __init__(self, message, disable=False):
+    def __init__(self, message, disable=False) -> None:
         self.message = message
         self.disable = disable
-        super().__init__(self.message)
+        super().__init__(message)
 
 
 def send_tor_signal(signal: Signal) -> bool:
@@ -64,7 +64,7 @@ def gen_query(query, args, config, near_city=None) -> str:
 
     # Use :past(hour/day/week/month/year) if available
     # example search "new restaurants :past month"
-    sub_lang = ''
+    lang = ''
     if ':past' in query and 'tbs' not in args:
         time_range = str.strip(query.split(':past', 1)[-1])
         param_dict['tbs'] = '&tbs=' + ('qdr:' + str.lower(time_range[0]))
@@ -79,9 +79,10 @@ def gen_query(query, args, config, near_city=None) -> str:
         # Example:
         # &tbs=qdr:h,lr:lang_1pl
         # -- the lr param needs to be extracted and remove the leading '1'
-        sub_lang = [_ for _ in result_tbs.split(',') if 'lr:' in _]
-        sub_lang = sub_lang[0][sub_lang[0].find('lr:') +
-                               3:len(sub_lang[0])] if len(sub_lang) > 0 else ''
+        result_params = [_ for _ in result_tbs.split(',') if 'lr:' in _]
+        if len(result_params) > 0:
+            result_param = result_params[0]
+            lang = result_param[result_param.find('lr:') + 3:len(result_param)]
 
     # Ensure search query is parsable
     query = urlparse.quote(query)
@@ -103,8 +104,8 @@ def gen_query(query, args, config, near_city=None) -> str:
     if 'source' in args:
         param_dict['source'] = '&source=' + args.get('source')
         param_dict['lr'] = ('&lr=' + ''.join(
-            [_ for _ in sub_lang if not _.isdigit()]
-        )) if sub_lang else ''
+            [_ for _ in lang if not _.isdigit()]
+        )) if lang else ''
     else:
         param_dict['lr'] = (
                 '&lr=' + config.lang_search
@@ -133,9 +134,9 @@ class Request:
     search suggestions, and loading of external content (images, audio, etc).
 
     Attributes:
-        normal_ua -- the user's current user agent
-        root_path -- the root path of the whoogle instance
-        config -- the user's current whoogle configuration
+        normal_ua: the user's current user agent
+        root_path: the root path of the whoogle instance
+        config: the user's current whoogle configuration
     """
 
     def __init__(self, normal_ua, root_path, config: Config):
@@ -150,12 +151,12 @@ class Request:
         # Set up proxy, if previously configured
         if os.environ.get('WHOOGLE_PROXY_LOC'):
             auth_str = ''
-            if os.environ.get('WHOOGLE_PROXY_USER'):
-                auth_str = os.environ.get('WHOOGLE_PROXY_USER') + \
-                           ':' + os.environ.get('WHOOGLE_PROXY_PASS')
+            if os.environ.get('WHOOGLE_PROXY_USER', ''):
+                auth_str = os.environ.get('WHOOGLE_PROXY_USER', '') + \
+                           ':' + os.environ.get('WHOOGLE_PROXY_PASS', '')
             self.proxies = {
-                'http': os.environ.get('WHOOGLE_PROXY_TYPE') + '://' +
-                auth_str + '@' + os.environ.get('WHOOGLE_PROXY_LOC'),
+                'http': os.environ.get('WHOOGLE_PROXY_TYPE', '') + '://' +
+                auth_str + '@' + os.environ.get('WHOOGLE_PROXY_LOC', ''),
             }
             self.proxies['https'] = self.proxies['http'].replace('http',
                                                                  'https')
@@ -210,6 +211,12 @@ class Request:
             'User-Agent': self.modified_user_agent
         }
 
+        # FIXME: Should investigate this further to ensure the consent
+        # view is suppressed correctly
+        cookies = {
+            'CONSENT': 'PENDING+999'
+        }
+
         # Validate Tor conn and request new identity if the last one failed
         if self.tor and not send_tor_signal(
                 Signal.NEWNYM if attempt > 0 else Signal.HEARTBEAT):
@@ -233,7 +240,8 @@ class Request:
         response = requests.get(
             base_url + query,
             proxies=self.proxies,
-            headers=headers)
+            headers=headers,
+            cookies=cookies)
 
         # Retry query with new identity if using Tor (max 10 attempts)
         if 'form id="captcha-form"' in response.text and self.tor:
